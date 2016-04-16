@@ -4,7 +4,6 @@ MAINTAINER cenegd <cenegd@live.com>
 
 RUN apt-get update -y
 RUN pip install requests bs4 html5lib
-
-EXPOSE 80
+COPY start.sh /start.sh
 
 CMD ["/bin/bash", "/start.sh"]
