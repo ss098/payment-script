@@ -1,1 +1,1 @@
-python alipay.py
+python /alipay.py
