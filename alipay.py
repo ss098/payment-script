@@ -1,9 +1,10 @@
 #!/usr/bin/env python
-#coding=utf-8
+# -*- coding: utf-8 -*-
 
 __author__ = "cenegd<cenegd@live.com>"
 
 import requests, time, hashlib, string, urllib, os
+import re
 from bs4 import BeautifulSoup
 requests.packages.urllib3.disable_warnings()
 
@@ -39,6 +40,7 @@ def check_order():
     r = s.get("https://consumeprod.alipay.com/record/advanced.htm?fundFlow=in&_input_charset=utf-8", cookies=cookie_string_to_dict(cookie))
     ps = BeautifulSoup(r.text, "html5lib")
     orderTable = ps.find("tbody")
+
     for order in orderTable.find_all("tr"):
         order_data = {}
         # 请装作没看见以下写的乱七八糟解析网页的代码
@@ -48,9 +50,9 @@ def check_order():
         # 用户 id，没什么用，为了兼容 EasyPay 架构存在
         order_data["userid"] = ""
 
-        # 订单名称
+        # 订单名称，正则去掉支付宝页面的空白
         try:
-            order_data["desc"] = order.td.find_next("td").find_next("td").p.a.string.encode("utf-8")
+            order_data["desc"] = re.sub('[ \n\t]*', '', order.td.find_next("td").find_next("td").p.string)
         except:
             order_data["desc"] = "get has error"
 
@@ -59,7 +61,9 @@ def check_order():
 
         # 支付宝对方用户名
         order_data["username"] = order.td.find_next("td").find_next("td").find_next("td").find_next("td").p.text.strip()
-        #order_data["username"] = u"error"
+        # 用户名为英文的话支付宝会用unicode编码，如用\u0062代替b
+        if order_data["username"].startswith('\u'):
+            order_data["username"].decode("unicode-escape")
 
         # 转账金额，支出为负
         order_data["amount"] = float(order.td.find_next("td").find_next("td").find_next("td").find_next("td").find_next("td").span.text[2:])
@@ -78,14 +82,12 @@ def check_order():
                 pass
             else:
                 # 通知服务器
-                # sig 签名算法 md5(tradeNo|payname|time|username|userid|amount|status|key)
+                # sig 签名算法 md5(tradeNo|desc|time|username|userid|amount|status|key)
 
                 # 实现自己向服务器的推送算法
 
                 push_data = order_data
-                #print order_data["tradeNo"], order_data["desc"], order_data["time"], order_data["username"], order_data["userid"], str(order_data["amount"]), order_data["status"], PUSH_STATE_KEY
-                sig_format = '|'.join([order_data["tradeNo"], order_data["desc"].decode("utf-8"), order_data["time"], order_data["username"], order_data["userid"], str(order_data["amount"]), order_data["status"], PUSH_STATE_KEY]).encode("utf-8")
-
+                sig_format = '|'.join([order_data["tradeNo"], order_data["desc"], order_data["time"], order_data["username"], order_data["userid"], str(order_data["amount"]), order_data["status"], PUSH_STATE_KEY]).encode("utf-8")
                 push_data["sig"] = hashlib.new("md5", sig_format).hexdigest().upper()
 
                 response_text = requests.post(PUSH_STATE_URL, data=push_data).text
